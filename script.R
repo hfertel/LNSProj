@@ -130,9 +130,71 @@ SATrees1<-SATrees %>%
   summarise(Tot_stems=sum(TOTAL),diamc1=sum(DIAM_CLASS_4_11),diamc2=sum(DIAM_CLASS_12_23),diamc3=sum(DIAM_CLASS_24_35),diam1=sum(DIAM_CLASS_36_))
 #now will want to pivot wider with one conifer and one hardwood column with tot. numbers of stems 
 
+SATrees2<-SATrees1 %>% 
+  select(Tot_stems,TreeType)
+
+SATrees2<-pivot_wider(SATrees2,
+                      names_from = TreeType,
+                      values_from= Tot_stems,
+                      values_fill = 0)
+
+#can get a TPA value for both types by multiplying by 5 because each plot is .2 acres
+
+SATrees2<-SATrees2 %>% 
+  mutate(ConiferTPA=Conifer*5,HardwoodTPA=Hardwood*5)
+
+#join to master plots
+
+MasterSAplots1<-left_join(MasterSAplots,SATrees2, by="PLOTKEY")
+
+MasterSAplots1[is.na(MasterSAplots1)] <- 0 
+
+MasterSAplots1<-MasterSAplots1 %>% 
+  mutate(Tot_Trees=Conifer+Hardwood)
+
+#ok I have tree data in there (preliminary) now for shrubs
+
+# 
+length( unique(SAShrub$name)) #56 species
+unique(SATrees$genus)
+#some percentage of that is barren, grass, litter etc.
+
+#read in CSV of types (without breaking apart tall/short shrubs)
+types<-read.csv("Data/ShrubSpecies.csv")
+
+SAShrub2<-left_join(x=SAShrub,y=types,by="name") #got to work by writing out names in csv then copying over
+#not working to join
+write.csv(SAShrub,"Data/SAShrub.csv")
+
+#assign new type for if height i.e. if type = shrub and height >4 ft, "tall shrub", otherwise = type category, then change regular shrub to short shrub
+
+SAShrub2$height<-as.numeric(SAShrub2$height)
+
+SAShrub2$type2<-ifelse(SAShrub2$Type=="Shrub" & SAShrub2$height > 4.00 | SAShrub2$Type=="Tree/Shrub"  & SAShrub2$height > 4.00 ,"Tall Shrub",SAShrub2$Type ) #assigning tall shrub category for over 4 ft 
+SAShrub2$type2<-ifelse(SAShrub2$type2=="Shrub","Short Shrub",SAShrub2$type2) #renaming other short shrub
+
+#might want to keep just shrub because not everything has a height...
+SAShrub2$type3<-ifelse(SAShrub2$Type=="Tree/Shrub","Shrub",SAShrub2$Type)
+SAShrub2$PERCENT<-as.numeric(SAShrub2$PERCENT)
+
+#pivot wider by type
+SAShrub3<-SAShrub2 %>%
+  select(PLOTKEY,type3,PERCENT) #only select variables of interest
+
+#group to get total cover by type
+SAShrub3<-SAShrub3 %>% 
+  group_by(PLOTKEY,type3) %>% 
+  summarise(Tot_cov=sum(PERCENT))
+
+  
+SAShrub4<-pivot_wider(SAShrub3,
+                      names_from = type3,
+                      values_from= Tot_cov,
+                      values_fill = 0) #got total cover 
 
 
-
+MasterSAplots2<-left_join(MasterSAplots1,SAShrub4, by="PLOTKEY")
+                       
 #####temp info#####
 library(ncdf4)
 library(ncdf4.helpers)
