@@ -41,12 +41,22 @@ require(data.table)
 ## ---------------------------
 
 
-VTMPlot<-read.delim("Data/vtm-plotdata-plot.txt")
-VTMTrees<-read.delim("Data/vtm-plotdata-trees.txt")
-VTMShrub<-read.delim("Data/vtm-plotdata-brush.txt")
+#VTMPlot<-read.table("Data/vtm-plotdata-plot.txt",header=TRUE, sep=" ")
+#VTMTrees<-read.delim("Data/vtm-plotdata-trees.txt")
+#VTMShrub<-read.delim("Data/vtm-plotdata-brush.txt")
 
-VTMflatbrush<-read.delim("Data/vtm-plotdata-flatBrush.txt")
-VTMflattrees<-read.delim("Data/vtm-plotdata-flatTrees.txt")
+#VTMflatbrush<-read.delim("Data/vtm-plotdata-flatBrush.txt")
+#VTMflattrees<-read.delim("Data/vtm-plotdata-flatTrees.txt")
+#dropping some values, try with CSV data
+
+VTMPlot<-read.csv("Data/VTMData/VTMPlotData.csv")
+VTMTrees<-read.csv("Data/VTMData/vtm-plotdata-trees.csv")
+VTMShrub<-read.csv("Data/VTMData/vtm-plotdata-brush..csv")
+
+
+
+
+
 
 #how are folks interpreting this data?? 
 
@@ -113,6 +123,7 @@ length( unique(studyareaplots$PLOTKEY))
 MasterSAplots<- SAPlots %>% 
   select(PLOTKEY,SLOPE_PERCENT,ELEVATION)
 
+MasterSAplots<-MasterSAplots[!duplicated(MasterSAplots$PLOTKEY), ]
 
 #find out all the species I have for trees, and categorize by hardwoods vs conifers
 
@@ -127,7 +138,7 @@ SATrees$TreeType<-ifelse(SATrees$genus %in% c("quercus","arbutus","acer"),"Hardw
 #including different diam classes
 SATrees1<-SATrees %>% 
   group_by(PLOTKEY,TreeType) %>% 
-  summarise(Tot_stems=sum(TOTAL),diamc1=sum(DIAM_CLASS_4_11),diamc2=sum(DIAM_CLASS_12_23),diamc3=sum(DIAM_CLASS_24_35),diam1=sum(DIAM_CLASS_36_))
+  summarise(Tot_stems=sum(TOTAL),diam4_11=sum(DIAM_CLASS_4_11),diam12_23=sum(DIAM_CLASS_12_23),diam24_35=sum(DIAM_CLASS_24_35),diamgr36=sum(DIAM_CLASS_36_))
 #now will want to pivot wider with one conifer and one hardwood column with tot. numbers of stems 
 
 SATrees2<-SATrees1 %>% 
@@ -139,6 +150,9 @@ SATrees2<-pivot_wider(SATrees2,
                       values_fill = 0)
 
 #can get a TPA value for both types by multiplying by 5 because each plot is .2 acres
+
+#another thing to look into is getting basal area for each type by multiplying average diam by forester's constant value and adding up all square feet by tree count
+#then I could theoretically get % cover for identifying veg types.  \]
 
 SATrees2<-SATrees2 %>% 
   mutate(ConiferTPA=Conifer*5,HardwoodTPA=Hardwood*5)
@@ -152,6 +166,9 @@ MasterSAplots1[is.na(MasterSAplots1)] <- 0
 MasterSAplots1<-MasterSAplots1 %>% 
   mutate(Tot_Trees=Conifer+Hardwood)
 
+
+
+
 #ok I have tree data in there (preliminary) now for shrubs
 
 # 
@@ -164,14 +181,15 @@ types<-read.csv("Data/ShrubSpecies.csv")
 
 SAShrub2<-left_join(x=SAShrub,y=types,by="name") #got to work by writing out names in csv then copying over
 #not working to join
-write.csv(SAShrub,"Data/SAShrub.csv")
+#write.csv(SAShrub,"Data/SAShrub.csv")
 
 #assign new type for if height i.e. if type = shrub and height >4 ft, "tall shrub", otherwise = type category, then change regular shrub to short shrub
 
 SAShrub2$height<-as.numeric(SAShrub2$height)
 
-SAShrub2$type2<-ifelse(SAShrub2$Type=="Shrub" & SAShrub2$height > 4.00 | SAShrub2$Type=="Tree/Shrub"  & SAShrub2$height > 4.00 ,"Tall Shrub",SAShrub2$Type ) #assigning tall shrub category for over 4 ft 
-SAShrub2$type2<-ifelse(SAShrub2$type2=="Shrub","Short Shrub",SAShrub2$type2) #renaming other short shrub
+#if I want to differentiate further by height, can add below lines, but not everything has a height...
+#SAShrub2$type2<-ifelse(SAShrub2$Type=="Shrub" & SAShrub2$height > 4.00 | SAShrub2$Type=="Tree/Shrub"  & SAShrub2$height > 4.00 ,"Tall Shrub",SAShrub2$Type ) #assigning tall shrub category for over 4 ft 
+#SAShrub2$type2<-ifelse(SAShrub2$type2=="Shrub","Short Shrub",SAShrub2$type2) #renaming other short shrub
 
 #might want to keep just shrub because not everything has a height...
 SAShrub2$type3<-ifelse(SAShrub2$Type=="Tree/Shrub","Shrub",SAShrub2$Type)
@@ -194,56 +212,173 @@ SAShrub4<-pivot_wider(SAShrub3,
 
 
 MasterSAplots2<-left_join(MasterSAplots1,SAShrub4, by="PLOTKEY")
+
+#want to get list of master plots in study area with data to clip mosaic to
+
+masterSAplotsforGIS<-na.omit(MasterSAplots2)
+
+#use above to filter shapefile of plots I've read in into a new shapefile of only study area plots
+
+vtmpoints_reduced<-vtmpoints %>% 
+  dplyr::filter(PLOTKEY %in% masterSAplotsforGIS$PLOTKEY )
+
+# want to write out above as shapefile.  
+
+str(vtmpoints_reduced)
+
+st_write(obj = vtmpoints_reduced,"GIS/SAVTMPlots.shp")
+
+
+#### veg type classification #####
+library(vegclust)
+
+MP4Clust<-MasterSAplots2 %>% 
+  select(PLOTKEY,ConiferTPA,HardwoodTPA,`Grass/Herb`,Shrub, Tot_Trees)
+
+####k-means function####
+#prove that it was ok to use two different methods 
+# Everything without trees looks like it is a shrubland...
+
+
+MP4Clust1<-MP4Clust %>% 
+  column_to_rownames(var="PLOTKEY")
+
+MP4Clust1<-as.data.frame(na.omit(scale(MP4Clust1)))
+
+
+k1<-kmeans(MP4Clust1, 4, iter.max = 10, nstart = 6)
+
+###try to find optimal number of kmeans clusters
+set.seed(1234)
+
+fviz_nbclust(MP4Clust1, kmeans, method = "wss")
+fviz_nbclust(MP4Clust1, kmeans, method = "silhouette")
+#also looking like 4 is best number by both metrics.  
+
+#ok will run with 4 cluster types then 
+k1.1<-kmeans(MP4Clust1, 4, nstart = 10)
+
+K1.1results<-as.data.frame(k1.1$cluster)
+names<-rownames(K1.1results)
+K1.1results$PLOTKEY<-names
+
+mp4clust1.2<-left_join(MP4Clust,K1.1results, by="PLOTKEY") 
+
+
+#not sure if it's really getting the forest/woodland/grassland distinction...need to see if I should separate out treed plots, or if there really aren't any grassland plots?
+#so far results seem to be: shrub dominated, hardwood dominated, mixed with grassland, mixed with shrub, conifer, hardwood
+#could be ok? 
+
+
+#could try running two separate ones on plots with or without trees? 
+
+#running one for only trees
+
+mp4clusttrees<-MasterSAplots2 %>% 
+  filter(Tot_Trees>0) %>% 
+  select(PLOTKEY,ConiferTPA,Tot_Trees,HardwoodTPA,Tot_Trees)
+  
+  
+mp4clusttrees1<-mp4clusttrees %>% 
+  column_to_rownames(var="PLOTKEY")
+
+k2<-kmeans(mp4clusttrees1, 4, iter.max = 10, nstart = 2)
+
+K2results<-as.data.frame(k2$cluster)
+names<-rownames(K2results)
+K2results$PLOTKEY<-names
+
+mp4clusttrees2<-left_join(mp4clusttrees,K2results, by="PLOTKEY")
+
+#running one for only grassland/shrubland? 
+#no plots with only grassland...
+
+#Cluster package Peeples 2011 i.e. as Collins et al. 2016
+
+####PAM Clustering####
+pam.res<-pam(MP4Clust1,4)
+pamclustgrp<-cbind(na.omit(MP4Clust),cluster=pam.res$cluster)
+#ok not sure what's going on here honestly...
+
+#####hierarchical clustering? ####
+#we have a smaller data set, with only a few variables and improved computing power.  
+#let's do a test with hclust and diana
+
+library(cluster)
+library(stats)
+library(factoextra)
+
+
+# methods to assess:figure out which clustering method is best
+m <- c( "average", "single", "complete", "ward")
+names(m) <- c( "average", "single", "complete", "ward")
+
+# function to compute coefficient
+ac <- function(x) {
+  agnes(MP4Clust1, method = x)$ac
+}
+
+map_dbl(m, ac)
+#ward has best coefficient in clustering structure 
+
+#hclust 
+#calculate dissimilarity matrix
+d<-dist(MP4Clust1,method="euclidean")
+hcl<-hclust(d,method="ward.D2")#run
+plot(hcl, cex=.6,hang=-1)#plot
+
+sub_grp<-cutree(hcl,k=4)
+table(sub_grp)
+
+hclustgrp<-MP4Clust %>%
+  na.omit() %>% 
+  mutate(cluster=sub_grp)
+
+#agnes
+hca<-agnes(MP4Clust1,method="ward")
+pltree(hca,cex=.6, hang=-1, main= "Dendogram of agnes")
+
+#cut tree to group agnes clusters into 3 groups
+plot(hca,cex=0.6)
+rect.hclust(hca,k=4)
+
+sub_grp<-cutree(hca,k=4)
+table(sub_grp)
+
+#look at how it assigned 4 groups
+agnesmpclust<-MP4Clust %>%
+  na.omit() %>% 
+  mutate(cluster=sub_grp)
+
+#Diana (divisive, or top-down clustering)
+#I think top-down clustering makes sense given out hunch on small # of groups 
+
+hcd<-diana(MP4Clust1)
+hcd$dc
+pltree(hcd,cex=.6, hang=-1, main= "Dendogram of diana")
+
+fviz_nbclust(MP4Clust1, FUN = hcut, method = "wss")#looking at optimal number of clusters via elbow method
+#look like 3 or 4 clusters is ideal
+#sihlouette method
+fviz_nbclust(MP4Clust1, FUN = hcut, method = "silhouette")
+#also ways optimal number is 4
+
+#cut tree to group diana clusters into 4 groups
+plot(hcd,cex=0.6)
+rect.hclust(hcd,k=4)
+
+sub_grp<-cutree(hcd,k=4)
+table(sub_grp)
+
+agnesmpclust<-MP4Clust %>%
+  na.omit() %>% 
+  mutate(cluster=sub_grp)
+#groups still not seeming super intuitive/ecologically based.  Not sure if that's ok or not? 
+
                        
-#####temp info#####
-library(ncdf4)
-library(ncdf4.helpers)
-library(PCICt)
-library(raster)
-library(stars)
 
-z<-nc_open("WRF_T_SFC.nc")
-zz<-raster::raster("WRF_T_SFC2.nc")
+#####Texture analysis####
+library(glcm)
 
-print(zz)
-zz<-nc_open("WRF_T_SFC2.nc")
-zz
-
-#trying in ncdf4
-time<-ncvar_get(zz,varid="time")
-summary(time)
-
-zz$dim$time$units
-# units is "seconds since 1970-01-01 00:00:00"
-
-zz$dim$south_north$units
-zz$dim$west_east
-zz$var$T_SFC$units
-zz$var$T_SFC
-zz$var$XLAT
-
-
-
-#trying with stack
-library(raster)
-filename<-"WRF_T_SFC2.nc"
-zz1<-brick(filename)
-zz1
-zz2<-zz1$X2015.01.01.00.00.00
-
-#trying in stars package
-t_file=system.file("WRF_T_SFC2.nc", package="stars")
-temp=read_ncdf("WRF_T_SFC2.nc", regular = c("west_east","north_south"),ignore_bounds = TRUE)
-#creates matrix of values--now we just need to take a slice to get values of interest
-#what I'm seeing is the temperature at the first hour 
-
-temp_slice=temp[1,2,1]#created slice that is temperature for one grid cell for every hour of the month of interest 
-#values are in x and y, so there ARE lat/long...but how to get to it? 
-#could extract grid cells of interest if there was an easy way to identify them...
-#reset dimensions to lat long rather than west_east etc. 
-temp_slice
-#ugh IDK 
-vtm<-read.csv("Data/vtm-plotdata-trees.csv")
-
-
-
+#specify window to generate texture values
+#is this necessary if I'm using ecognition? 
