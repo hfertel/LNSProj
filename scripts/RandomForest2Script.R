@@ -1,6 +1,6 @@
 ## ---------------------------
 ##
-## Script name: RandomForestLNS
+## Script name: RandomForestLNS Attempt 2
 ##
 ## Purpose of script: Random forest classifier for vegetation segments
 ##
@@ -46,23 +46,23 @@ library(sf)
 
 
 #read in training data
-trainingsegs<-read_sf(dsn = "C:/Users/hmfertel.CAMPUS/Documents/Stephens Lab/LNS Veg Project/GIS Files/Segments/segments19412.shp")
+trainingsegs<-read_sf(dsn = "C:/Users/hmfertel.CAMPUS/Documents/Stephens Lab/LNS Veg Project/GIS Files/Segments/Segments1941_8_15_22.shp")
 
 #cleaning
 trainsegs1<-as.data.frame(trainingsegs) %>% 
-  dplyr::filter(Train_ID %in% c("Woodland","Forest","Herbaceous","Shrub")) %>% 
+  dplyr::filter(Train_ID2 %in% c("Woodland","Forest","Herbaceous","Shrub")) %>% 
   dplyr::select(Brightness, GLCM_Ang_2,GLCM_Contr,GLCM_Dissi,GLCM_Entro,GLCM_Hom_1, 
                 GLCM_Mean_, GLCM_StdDe, Max_pixel, Min_pixel, Mean_Layer,GLCMcont3,
-                quantile25,quantile50,quantile75, Skewness_L,Train_ID)
+                quantile25,quantile50,quantile75, Skewness_L,Train_ID2)
 
-table(trainsegs1$Train_ID)
+table(trainsegs1$Train_ID2)
 
 # Converting ‘Survived’ to a factor
-trainsegs1$Train_ID <- factor(trainsegs1$Train_ID)
+trainsegs1$Train_ID2 <- factor(trainsegs1$Train_ID2)
 # Set a random seed
 set.seed(61)
 # Training using ‘random forest’ algorithm
-RF1<-randomForest(Train_ID ~ .,data=trainsegs1,importance=TRUE,proximity=TRUE)
+RF1<-randomForest(Train_ID2 ~ .,data=trainsegs1,importance=TRUE,proximity=TRUE)
 
 print(RF1)
 
@@ -72,7 +72,7 @@ print(RF1)
 
 set.seed(647)
 msegs <- trainsegs1[1:16]
-result <- rfcv(msegs, trainsegs1$Train_ID, cv.fold=3)
+result <- rfcv(msegs, trainsegs1$Train_ID2, cv.fold=3)
 with(result, plot(n.var, error.cv, log="x", type="o", lwd=2))
 
 #figure out which variables are important
@@ -82,7 +82,7 @@ varUsed(RF1, by.tree=FALSE,count = TRUE)
 
 
 
-mtry <- tuneRF(trainsegs1[1:16],trainsegs1$Train_ID, ntreeTry=500,
+mtry <- tuneRF(trainsegs1[1:16],trainsegs1$Train_ID2, ntreeTry=500,
                stepFactor=1.5,improve=0.01, trace=TRUE, plot=TRUE)
 #get best number of variables for each tree 
 
@@ -92,7 +92,7 @@ print(best.m)
 
 
 set.seed(52)
-RF2<-randomForest(Train_ID ~ .,data=trainsegs1, mtry=4,importance=TRUE,proximity=TRUE)
+RF2<-randomForest(Train_ID2 ~ .,data=trainsegs1, mtry=4,importance=TRUE,proximity=TRUE)
 
 print(RF2)
 #was able to lower error rate somewhat 
@@ -110,7 +110,7 @@ All_Segs<-as.data.frame(All_Segs) %>%
                 GLCM_Mean_, GLCM_StdDe, Max_pixel, Min_pixel, Mean_Layer,GLCMcont3,
                 quantile25,quantile50,quantile75, Skewness_L,UID) %>% 
   na.omit()
-  
+
 
 predict1<-as.data.frame(predict(RF2, All_Segs))
 table(predict1)
@@ -130,24 +130,25 @@ write.csv(All_Segs,"C:/Users/hmfertel.CAMPUS/Documents/Stephens Lab/LNS Veg Proj
 
 #####Modern Data ####
 #read in training data
-trainingsegsmod<-read_sf(dsn = "C:/Users/hmfertel.CAMPUS/Documents/Stephens Lab/LNS Veg Project/GIS Files/Segments/studysegs_14/StudySegs14_2.shp")
+trainingsegsmod<-read_sf(dsn = "C:/Users/hmfertel.CAMPUS/Documents/Stephens Lab/LNS Veg Project/GIS Files/Segments/Segments2014_8_15_22.shp")
 
 #cleaning
 trainsegsmod1<-as.data.frame(trainingsegsmod) %>% 
-  dplyr::filter(TrainID %in% c("Woodland","Forest","Herbaceous","Shrub")) %>% 
+  dplyr::filter(TrainID2 %in% c("Woodland","Forest","Herbaceous","Shrub")) %>% 
   dplyr::select(Brightness, GLCM_Ang_2,GLCM_Contr,GLCM_Dissi,GLCM_Entro,GLCM_Hom_1, 
                 GLCM_Mean_, GLCM_StdDe, Max_pixel, Min_pixel, Mean_Layer,GLCMcont3,
-                quantile25,quantile50,quantile75, Skewness_L,TrainID)
+                quantile25,quantile50,quantile75, Skewness_L,TrainID2)
 
-table(trainsegsmod1$TrainID)
+table(trainsegsmod1$TrainID2)
 
 # Converting ‘Survived’ to a factor
-trainsegsmod1$TrainID <- factor(trainsegsmod1$TrainID)
+trainsegsmod1$TrainID2 <- factor(trainsegsmod1$TrainID2)
+
 # Set a random seed
 set.seed(63)
 
 # Training using ‘random forest’ algorithm
-RF3<-randomForest(TrainID ~ .,data=trainsegsmod1,importance=TRUE,proximity=TRUE)
+RF3<-randomForest(TrainID2 ~ .,data=trainsegsmod1,importance=TRUE,proximity=TRUE)
 
 print(RF3)
 
@@ -164,7 +165,7 @@ print(best.m)
 
 
 set.seed(52)
-RF4<-randomForest(TrainID ~ .,data=trainsegsmod1, mtry=best.m,importance=TRUE,proximity=TRUE)
+RF4<-randomForest(TrainID2 ~ .,data=trainsegsmod1, mtry=best.m,importance=TRUE,proximity=TRUE)
 
 print(RF4)
 
@@ -190,5 +191,7 @@ allsegsmod2<-cbind(allsegsmod2,predict2)
 #write.csv(allsegsmod2,"C:/Users/hmfertel.CAMPUS/Documents/Stephens Lab/LNS Veg Project/GIS Files/SegsPredict14.csv", row.names = FALSE)
 
 
-               
+#This is the winner...need to remember that the Pik value is the OOB accuracy/total proportion
+sqrt((.02*.0176-.0176^2)/74 + (.645*.0040-.0040^2)/324+(.32*.0019-.0019^2)/164)
+
 
